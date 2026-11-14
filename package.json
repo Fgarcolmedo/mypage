@@ -1,0 +1,19 @@
+{
+  "name": "robolab",
+  "version": "1.0.0",
+  "description": "Simulador 3D de robótica con diseñador de robots y tutoriales",
+  "main": "main.js",
+  "author": "RoboLab",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac dmg"
+  },
+  "dependencies": { "three": "0.160.0" },
+  "devDependencies": { "electron": "^31.0.0", "electron-builder": "^24.13.3" },
+  "build": {
+    "appId": "com.robolab.app",
+    "productName": "RoboLab",
+    "mac": { "target": "dmg", "category": "public.app-category.education" },
+    "dmg": { "title": "RoboLab" }
+  }
+}

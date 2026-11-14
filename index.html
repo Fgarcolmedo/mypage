@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><title>RoboLab</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'">
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<style>
+:root{--bg:#10151b;--pn:#18202a;--ln:#2b3744;--tx:#dbe4ee;--mu:#8497ab;--ac:#5ab0ff;--am:#ffb84d;--er:#ff7a7a}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font:13px/1.45 -apple-system,"SF Pro Text",system-ui,sans-serif;display:grid;grid-template-columns:310px 1fr 380px;grid-template-rows:100%}
+aside{background:var(--pn);border:0 solid var(--ln);overflow:auto;display:flex;flex-direction:column}
+#left{border-right-width:1px}#right{border-left-width:1px}
+.tabs{display:flex;border-bottom:1px solid var(--ln)}
+.tabs button{flex:1;padding:12px;background:none;border:0;color:var(--mu);font:600 13px inherit;cursor:pointer;border-bottom:2px solid transparent}
+.tabs button.on{color:var(--tx);border-color:var(--ac)}
+.pane{padding:14px;display:none}.pane.on{display:block}
+h3{margin:0 0 6px;font-size:15px}h4{margin:14px 0 6px;font-size:13px;color:var(--mu);font-weight:600}
+button.b{background:#243140;color:var(--tx);border:1px solid var(--ln);border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit}
+button.b:hover{border-color:var(--ac)}button.p{background:var(--ac);color:#08141f;border-color:var(--ac);font-weight:600}
+.j{border:1px solid var(--ln);border-radius:8px;padding:10px;margin-bottom:8px}
+.j .r{display:flex;align-items:center;gap:8px;margin:4px 0}.j label{width:62px;color:var(--mu)}
+.j input[type=range]{flex:1}.j select{background:#243140;color:var(--tx);border:1px solid var(--ln);border-radius:4px;padding:2px}
+.j .x{margin-left:auto;background:none;border:0;color:var(--er);cursor:pointer}
+.val{width:44px;text-align:right;font-variant-numeric:tabular-nums}
+#mid{position:relative;min-width:0}#view{position:absolute;inset:0}
+#bar{position:absolute;left:12px;bottom:12px;display:flex;gap:8px;align-items:center;background:#10151bd9;padding:8px 10px;border-radius:8px;border:1px solid var(--ln)}
+#hud{position:absolute;left:12px;top:12px;color:var(--mu);font:12px ui-monospace,"SF Mono",monospace;white-space:pre}
+#code{flex:1;min-height:200px;background:#0c1116;color:#cfe3ff;border:0;border-bottom:1px solid var(--ln);padding:12px;font:12.5px/1.5 ui-monospace,"SF Mono",monospace;resize:none;outline:none;tab-size:2}
+#acts{display:flex;gap:8px;padding:10px;border-bottom:1px solid var(--ln)}
+#log{height:190px;overflow:auto;padding:10px;font:12px/1.5 ui-monospace,"SF Mono",monospace;color:var(--mu);white-space:pre-wrap}
+#log .e{color:var(--er)}#log .ok{color:var(--am)}
+.les{display:block;width:100%;text-align:left;margin-bottom:6px}.les.on{border-color:var(--ac)}
+.les small{display:block;color:var(--mu)}
+#ltext{white-space:pre-wrap;margin:8px 0 10px}
+</style></head><body>
+<aside id="left">
+  <div class="tabs"><button id="t1" class="on">Diseñar</button><button id="t2">Tutorial</button></div>
+  <div class="pane on" id="p1">
+    <h3>Tu robot</h3>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button class="b p" id="add">Añadir articulación</button><button class="b" id="reset">Restablecer</button></div>
+    <div id="jl"></div>
+  </div>
+  <div class="pane" id="p2">
+    <h3>Aprende robótica</h3>
+    <div id="lessons"></div>
+    <h4 id="lt"></h4><div id="ltext"></div>
+    <button class="b p" id="load">Cargar código de la lección</button>
+  </div>
+</aside>
+<main id="mid"><div id="view"></div><div id="hud"></div>
+  <div id="bar"><button class="b" id="tgt">Mover objetivo</button>
+  <label>Velocidad <input type="range" id="spd" min="0.3" max="3" step="0.1" value="1"></label></div></main>
+<aside id="right">
+  <div id="acts"><button class="b p" id="run">Ejecutar</button><button class="b" id="stop">Detener</button><button class="b" id="clr">Limpiar consola</button></div>
+  <textarea id="code" spellcheck="false"></textarea><div id="log"></div>
+</aside>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+const $=id=>document.getElementById(id), D=Math.PI/180, BASE=0.2;
+const COL=[0x5ab0ff,0x7ee0c3,0xc79bff,0xffd27a,0xff9bb0,0x9bd0ff];
+
+// ---- escena
+const view=$('view'), R=new THREE.WebGLRenderer({antialias:true});
+R.setPixelRatio(devicePixelRatio);view.appendChild(R.domElement);
+const S=new THREE.Scene();S.background=new THREE.Color(0x10151b);
+const cam=new THREE.PerspectiveCamera(50,1,.1,100);cam.position.set(2.6,2.2,3.6);
+const oc=new OrbitControls(cam,R.domElement);oc.target.set(0,1,0);
+S.add(new THREE.HemisphereLight(0xffffff,0x223344,1.1));
+const dl=new THREE.DirectionalLight(0xffffff,1.6);dl.position.set(3,5,2);S.add(dl);
+S.add(new THREE.GridHelper(8,16,0x3a4a5c,0x232e3a));
+const tm=new THREE.Mesh(new THREE.SphereGeometry(.07),new THREE.MeshStandardMaterial({color:0xffb84d,emissive:0x553300}));
+S.add(tm);const target={x:1,y:1,z:0};
+function setTarget(x,y){target.x=+x.toFixed(2);target.y=+y.toFixed(2);tm.position.set(target.x,target.y,0)}setTarget(1,1);
+new ResizeObserver(()=>{const w=view.clientWidth,h=view.clientHeight;R.setSize(w,h);cam.aspect=w/h;cam.updateProjectionMatrix()}).observe(view);
+
+// ---- robot
+const mk=()=>[{len:1,axis:'z',a:0,t:0},{len:.8,axis:'z',a:0,t:0},{len:.5,axis:'z',a:0,t:0}];
+let J=mk(),root,tipObj;
+function build(){
+  if(root)S.remove(root);root=new THREE.Group();S.add(root);
+  const bm=new THREE.Mesh(new THREE.CylinderGeometry(.3,.35,BASE,32),new THREE.MeshStandardMaterial({color:0x3a4a5c}));
+  bm.position.y=BASE/2;root.add(bm);let parent=root;
+  J.forEach((j,i)=>{
+    const p=new THREE.Group();p.position.y=i?J[i-1].len:BASE;parent.add(p);
+    const m=new THREE.MeshStandardMaterial({color:COL[i%COL.length],metalness:.2,roughness:.5});
+    const l=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,j.len,20),m);l.position.y=j.len/2;p.add(l);
+    p.add(new THREE.Mesh(new THREE.SphereGeometry(.11),new THREE.MeshStandardMaterial({color:0xdbe4ee})));
+    p.rotation[j.axis]=j.a;j.p=p;parent=p});
+  tipObj=new THREE.Object3D();if(J.length){tipObj.position.y=J.at(-1).len;parent.add(tipObj)}else root.add(tipObj)}
+let spd=1,last=performance.now();
+(function loop(n){requestAnimationFrame(loop);const dt=Math.min((n-last)/1000,.05);last=n;
+  J.forEach(j=>{const d=j.t-j.a,s=1.6*spd*dt;j.a+=Math.abs(d)<=s?d:Math.sign(d)*s;j.p.rotation[j.axis]=j.a});
+  const p=tip();$('hud').textContent=`punta  x ${p.x}  y ${p.y}  z ${p.z}\nobjetivo x ${target.x}  y ${target.y}`;
+  R.render(S,cam)})(last);
+const tip=()=>{const v=new THREE.Vector3();tipObj.getWorldPosition(v);const r=x=>+x.toFixed(3);return{x:r(v.x),y:r(v.y),z:r(v.z)}};
+
+// ---- API para el código del usuario
+let stopF=false;
+const frame=()=>{if(stopF)throw new Error('__stop');return new Promise(r=>requestAnimationFrame(r))};
+const sleep=async ms=>{const t0=performance.now();while(performance.now()-t0<ms)await frame()};
+const log=(m,c='')=>{const d=document.createElement('div');d.className=c;d.textContent=m;$('log').append(d);$('log').scrollTop=1e9};
+const robot={
+  n:()=>J.length, lengths:()=>J.map(j=>j.len), angle:i=>+(J[i].a/D).toFixed(1), tip,
+  async move(i,deg){if(!J[i])throw new Error('No existe la articulación '+i);
+    J[i].t=Math.max(-170,Math.min(170,deg))*D;while(Math.abs(J[i].t-J[i].a)>1e-3)await frame()},
+  moveAll:d=>Promise.all(d.map((x,i)=>robot.move(i,x)))};
+function ik2(x,y){const L1=J[0].len,L2=J[1].len,yy=y-BASE,c=(x*x+yy*yy-L1*L1-L2*L2)/(2*L1*L2);
+  if(Math.abs(c)>1){log('Objetivo fuera de alcance','e');return null}
+  const q2=Math.acos(c),f=Math.atan2(yy,x)-Math.atan2(L2*Math.sin(q2),L1+L2*Math.cos(q2));
+  return[+(f/D-90).toFixed(1),+(q2/D).toFixed(1)]}
+const AF=Object.getPrototypeOf(async()=>{}).constructor;
+$('run').onclick=async()=>{stopF=false;$('run').disabled=true;
+  try{await new AF('robot','sleep','log','target','ik2','Math',$('code').value)(robot,sleep,m=>log(String(m)),target,ik2,Math);
+    const p=tip();if(Math.hypot(p.x-target.x,p.y-target.y,p.z)<.08)log('🎯 ¡Objetivo alcanzado!','ok')}
+  catch(e){if(e.message!=='__stop')log('Error: '+e.message,'e')}
+  $('run').disabled=false};
+$('stop').onclick=()=>{stopF=true};$('clr').onclick=()=>$('log').replaceChildren();
+
+// ---- diseñador
+function ui(){const box=$('jl');box.replaceChildren();
+  J.forEach((j,i)=>{const d=document.createElement('div');d.className='j';
+    d.innerHTML=`<b style="color:#${COL[i%6].toString(16)}">Articulación ${i}</b><button class="x" title="Eliminar">✕</button>
+    <div class="r"><label>Largo</label><input type="range" min=".3" max="1.5" step=".05" value="${j.len}"><span class="val">${j.len}</span></div>
+    <div class="r"><label>Eje</label><select><option value="z">z (doblar)</option><option value="y">y (girar)</option><option value="x">x (cabecear)</option></select></div>
+    <div class="r"><label>Ángulo</label><input type="range" min="-170" max="170" value="${Math.round(j.a/D)}"><span class="val">${Math.round(j.a/D)}°</span></div>`;
+    const [len,ang]=d.querySelectorAll('input'),sel=d.querySelector('select'),vs=d.querySelectorAll('.val');sel.value=j.axis;
+    len.oninput=()=>{j.len=+len.value;vs[0].textContent=j.len;keep()};
+    sel.onchange=()=>{j.p.rotation[j.axis]=0;j.axis=sel.value;keep()};
+    ang.oninput=()=>{j.a=j.t=ang.value*D;vs[1].textContent=ang.value+'°'};
+    d.querySelector('.x').onclick=()=>{J.splice(i,1);keep(true)};box.append(d)})}
+function keep(redraw){build();if(redraw)ui()}
+$('add').onclick=()=>{if(J.length<6){J.push({len:.6,axis:'z',a:0,t:0});build();ui()}};
+$('reset').onclick=()=>{J=mk();build();ui()};
+$('spd').oninput=e=>spd=+e.target.value;
+$('tgt').onclick=()=>{const r=(J.length>1?J[0].len+J[1].len:1)*(.45+Math.random()*.45),th=(15+Math.random()*150)*D;
+  setTarget(r*Math.cos(th),Math.max(.1,BASE+r*Math.sin(th)))};
+
+// ---- tutorial
+const L=[
+['1. Mover una articulación','Un robot es una cadena de articulaciones. Cada una se mueve con robot.move(índice, grados). La numeración empieza en 0 (la base). Usa await para esperar a que termine el movimiento.',
+`await robot.move(0, 45);   // la base se inclina 45°
+await robot.move(1, -60);  // el codo se dobla
+await robot.move(0, 0);    // vuelve`],
+['2. Secuencias y bucles','Los robots repiten tareas. Un bucle for ejecuta la misma secuencia varias veces. robot.moveAll mueve todas las articulaciones a la vez.',
+`for (let i = 0; i < 3; i++) {
+  await robot.moveAll([60, -80, 40]);
+  await robot.moveAll([-60, 80, -40]);
+}
+await robot.moveAll([0, 0, 0]);`],
+['3. Sensores y condiciones','robot.tip() devuelve la posición de la punta (x, y, z) y robot.angle(i) el ángulo de una articulación. Con while puedes moverte hasta que se cumpla una condición.',
+`let a = 0;
+while (robot.tip().y > 1.2) {
+  a += 5;
+  await robot.move(1, a);
+}
+log('Parado con el codo a ' + a + '°');`],
+['4. Cinemática inversa','Para llevar la punta a un punto hay que calcular los ángulos. ik2(x, y) lo resuelve para las dos primeras articulaciones. Pulsa "Mover objetivo" y vuelve a ejecutar.',
+`const ang = ik2(target.x, target.y);
+if (ang) {
+  await robot.moveAll([ang[0], ang[1], 0]);
+}`],
+['5. Diseña tu propio robot','Vuelve a la pestaña Diseñar: cambia largos, añade articulaciones y cambia el eje (y gira sobre sí misma, z dobla). Este código funciona con cualquier número de articulaciones.',
+`for (let i = 0; i < robot.n(); i++) {
+  await robot.move(i, 30);
+  log('Articulación ' + i + ' a ' + robot.angle(i) + '°');
+}`]];
+let cur=0;
+L.forEach((l,i)=>{const b=document.createElement('button');b.className='b les';b.innerHTML=`${l[0]}`;b.onclick=()=>sel(i);$('lessons').append(b)});
+function sel(i){cur=i;[...$('lessons').children].forEach((b,k)=>b.classList.toggle('on',k===i));
+  $('lt').textContent=L[i][0];$('ltext').textContent=L[i][1];$('code').value=L[i][2]}
+$('load').onclick=()=>sel(cur);
+const tab=n=>{[1,2].forEach(k=>{$('t'+k).classList.toggle('on',k===n);$('p'+k).classList.toggle('on',k===n)})};
+$('t1').onclick=()=>tab(1);$('t2').onclick=()=>tab(2);
+build();ui();sel(0);
+</script></body></html>
